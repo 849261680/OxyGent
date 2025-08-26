@@ -3,6 +3,7 @@ Unit tests for FunctionHub
 """
 
 import asyncio
+
 import pytest
 
 from oxygent.oxy.function_tools.function_hub import FunctionHub
@@ -68,6 +69,7 @@ async def test_init_converts_to_function_tools(func_hub, mas_env):
     assert isinstance(tool, FunctionTool)
     assert tool.desc == "echo"
     from oxygent.schemas import OxyRequest
+
     oxy_req = OxyRequest(
         arguments={"msg": "hello"},
         caller="tester",

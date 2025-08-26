@@ -5,11 +5,11 @@ import base64
 import hashlib
 import json
 import logging
+import mimetypes
 import os
 import platform
 import re
 import uuid
-import mimetypes 
 from datetime import datetime
 from io import BytesIO
 from typing import Any, Dict, Union
@@ -123,33 +123,38 @@ async def video_to_base64(source: str, max_video_size: int = 512 * 1024 * 1024) 
         return source
     else:
         return f"data:video;base64,{base64.b64encode(video_bytes).decode('utf-8')}"
-    
+
+
 async def table_to_base64(source: str, max_table_size: int = 50 * 1024 * 1024) -> str:
     """Convert table files to base64 encoding.
-    
+
     Args:
         source: File path or URL
         max_table_size: Maximum file size (default 50MB)
-    
+
     Returns:
         Base64 encoded string with data URI format
     """
     table_bytes = await source_to_bytes(source)
     if len(table_bytes) > max_table_size:
-        raise ValueError(f"Table file size ({len(table_bytes)} bytes) exceeds maximum allowed size ({max_table_size} bytes)")
-    
+        raise ValueError(
+            f"Table file size ({len(table_bytes)} bytes) exceeds maximum allowed size ({max_table_size} bytes)"
+        )
+
     import os
+
     file_ext = os.path.splitext(source.lower())[1]
     mime_type_map = {
-        '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        '.xls': 'application/vnd.ms-excel',
-        '.csv': 'text/csv',
-        '.tsv': 'text/tab-separated-values',
-        '.ods': 'application/vnd.oasis.opendocument.spreadsheet'
+        ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ".xls": "application/vnd.ms-excel",
+        ".csv": "text/csv",
+        ".tsv": "text/tab-separated-values",
+        ".ods": "application/vnd.oasis.opendocument.spreadsheet",
     }
-    
-    mime_type = mime_type_map.get(file_ext, 'application/octet-stream')
+
+    mime_type = mime_type_map.get(file_ext, "application/octet-stream")
     return f"data:{mime_type};base64,{base64.b64encode(table_bytes).decode('utf-8')}"
+
 
 async def file_to_base64(source: str, max_file_size: int = 10 * 1024 * 1024) -> str:
     """For small non-media files (<10 MB) return a data-URI, otherwise回传原路径/URL."""
@@ -161,27 +166,31 @@ async def file_to_base64(source: str, max_file_size: int = 10 * 1024 * 1024) -> 
         mime_type = "application/octet-stream"
     return f"data:{mime_type};base64,{base64.b64encode(file_bytes).decode()}"
 
+
 def validate_table_file(file_path: str) -> bool:
     """Validate if the file is a supported table format."""
     supported_extensions = (".xlsx", ".xls", ".csv", ".tsv", ".ods")
     return file_path.lower().endswith(supported_extensions)
 
+
 def get_table_file_info(file_path: str) -> dict:
     """Get basic information about a table file."""
     import os
-    
+
     if not os.path.exists(file_path) and not file_path.startswith("http"):
         return {"error": "File not found"}
-    
+
     try:
-        file_size = os.path.getsize(file_path) if not file_path.startswith("http") else None
+        file_size = (
+            os.path.getsize(file_path) if not file_path.startswith("http") else None
+        )
         file_ext = os.path.splitext(file_path.lower())[1][1:]
-        
+
         return {
             "filename": os.path.basename(file_path),
             "extension": file_ext,
             "size": file_size,
-            "is_supported": validate_table_file(file_path)
+            "is_supported": validate_table_file(file_path),
         }
     except Exception as e:
         return {"error": str(e)}
@@ -277,9 +286,9 @@ def process_attachments(attachments):
     image_exts = (".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tiff")
     video_exts = (".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm", ".mkv")
     table_exts = (".xlsx", ".xls", ".csv", ".tsv", ".ods")
-    doc_exts   = (".doc", ".docx")
-    pdf_exts   = (".pdf",)
-    code_exts  = (".py", ".md", ".json", ".txt")
+    doc_exts = (".doc", ".docx")
+    pdf_exts = (".pdf",)
+    code_exts = (".py", ".md", ".json", ".txt")
 
     for attachment in attachments:
         if not (attachment.startswith("http") or os.path.exists(attachment)):
@@ -289,38 +298,50 @@ def process_attachments(attachments):
         ext = os.path.splitext(attachment.lower())[1]
 
         if ext in image_exts:
-            query_attachments.append({"type": "image_url",
-                                      "image_url": {"url": attachment}})
+            query_attachments.append(
+                {"type": "image_url", "image_url": {"url": attachment}}
+            )
         elif ext in video_exts:
-            query_attachments.append({"type": "video_url",
-                                      "video_url": {"url": attachment}})
+            query_attachments.append(
+                {"type": "video_url", "video_url": {"url": attachment}}
+            )
         elif ext in table_exts:
-            query_attachments.append({"type": "table_file",
-                                      "table_file": {"url": attachment,
-                                                     "format": ext.lstrip('.')}})
+            query_attachments.append(
+                {
+                    "type": "table_file",
+                    "table_file": {"url": attachment, "format": ext.lstrip(".")},
+                }
+            )
         elif ext in doc_exts:
-            query_attachments.append({"type": "doc_file",
-                                      "doc_file": {"url": attachment,
-                                                   "format": ext.lstrip('.')}})
+            query_attachments.append(
+                {
+                    "type": "doc_file",
+                    "doc_file": {"url": attachment, "format": ext.lstrip(".")},
+                }
+            )
         elif ext in pdf_exts:
-            query_attachments.append({"type": "pdf_file",
-                                      "pdf_file": {"url": attachment,
-                                                   "format": "pdf"}})
+            query_attachments.append(
+                {"type": "pdf_file", "pdf_file": {"url": attachment, "format": "pdf"}}
+            )
         elif ext in code_exts:
-            query_attachments.append({"type": "code_file",
-                                      "code_file": {"url": attachment,
-                                                    "format": ext.lstrip('.')}})
+            query_attachments.append(
+                {
+                    "type": "code_file",
+                    "code_file": {"url": attachment, "format": ext.lstrip(".")},
+                }
+            )
         else:
             # fallback
-            query_attachments.append({"type": "file",
-                                      "file": {"url": attachment,
-                                               "format": ext.lstrip('.')}})
+            query_attachments.append(
+                {"type": "file", "file": {"url": attachment, "format": ext.lstrip(".")}}
+            )
 
     return query_attachments
 
+
 def _compose_query_parts(original_query, attachments):
     """
-     <string | list | dict> + attachments:list[str] -> A2A-style parts
+    <string | list | dict> + attachments:list[str] -> A2A-style parts
     """
     parts = []
 
@@ -335,6 +356,8 @@ def _compose_query_parts(original_query, attachments):
     elif isinstance(original_query, dict):
         parts.append(original_query)
     else:  # fallback : query = ""
-        parts.append({"part": {"content_type": "text/plain", "data": str(original_query)}})
+        parts.append(
+            {"part": {"content_type": "text/plain", "data": str(original_query)}}
+        )
 
     return parts

@@ -46,8 +46,6 @@ class Observation(BaseModel):
             else:
                 outs.append(prefix + to_json(exec_result.oxy_response.output))
         if is_multimodal_supported and query_attachments:
-            return query_attachments + [
-                {"type": "text", "text": "\n\n".join(outs)}
-            ]
+            return query_attachments + [{"type": "text", "text": "\n\n".join(outs)}]
         else:
             return "\n\n".join(outs)

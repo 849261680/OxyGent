@@ -5,16 +5,14 @@ communicating with remote language model APIs over HTTP. It supports various LLM
 providers that follow OpenAI-compatible API standards.
 """
 
-import logging
 import json
-import asyncio
+import logging
 
 import httpx
 
 from ...config import Config
 from ...schemas import OxyRequest, OxyResponse, OxyState
 from .remote_llm import RemoteLLM
-
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +23,7 @@ class HttpLLM(RemoteLLM):
     This class provides a concrete implementation of RemoteLLM for communicating
     with remote LLM APIs over HTTP. It handles API authentication, request
     formatting, and response parsing for OpenAI-compatible APIs.
-    """ 
+    """
 
     async def _execute(self, oxy_request: OxyRequest) -> OxyResponse:
         """Execute an HTTP request to the remote LLM API.
@@ -40,28 +38,28 @@ class HttpLLM(RemoteLLM):
         Returns:
             OxyResponse: The response containing the LLM's output with COMPLETED state.
         """
-        
+
         url = self.base_url.rstrip("/")
         is_gemini = "generativelanguage.googleapis.com" in url
         use_openai = (self.api_key is not None) and (not is_gemini)
-        if is_gemini:                                                    
+        if is_gemini:
             if not url.endswith(":generateContent"):
                 url = f"{url}/models/{self.model_name}:generateContent"
         elif use_openai:
             if not url.endswith("/chat/completions"):
                 url = f"{url}/chat/completions"
         else:
-            if not url.endswith("/api/chat"): # only support ollama
+            if not url.endswith("/api/chat"):  # only support ollama
                 url = f"{url}/api/chat"
 
         headers = {"Content-Type": "application/json"}
-        if is_gemini:                                                    
+        if is_gemini:
             headers["X-goog-api-key"] = self.api_key
         elif use_openai:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
         # Construct payload for the API request
-        if is_gemini:                                                    
+        if is_gemini:
             raw_msgs = await self._get_messages(oxy_request)
             contents = [
                 {
@@ -76,7 +74,7 @@ class HttpLLM(RemoteLLM):
             for k, v in oxy_request.arguments.items():
                 if k != "messages":
                     payload[k] = v
-        else: 
+        else:
             llm_config = {
                 k: v
                 for k, v in Config.get_llm_config().items()
@@ -105,28 +103,42 @@ class HttpLLM(RemoteLLM):
         if payload.get("stream", False) and (use_openai or not is_gemini):
             result_parts: list[str] = []
             async with httpx.AsyncClient(timeout=None) as client:
-                async with client.stream("POST", url, headers=headers,
-                                          json=payload) as resp:
+                async with client.stream(
+                    "POST", url, headers=headers, json=payload
+                ) as resp:
                     async for line in resp.aiter_lines():
                         if not line:
                             continue
-                        if line.startswith("data: "):
-                            line = line[6:]
+                        if line.startswith("data:"):
+                            line = line[5:].strip()
                         if line.strip() == "[DONE]":
                             break
                         try:
                             chunk = json.loads(line)
                         except json.JSONDecodeError:
                             continue
-                        delta = (
-                            chunk["choices"][0]["delta"].get("content", "")
-                            if use_openai else
-                            chunk.get("message", {}).get("content", "")
-                        )
+                        except Exception as e:
+                            logger.error(
+                                e,
+                                extra={
+                                    "trace_id": oxy_request.current_trace_id,
+                                    "node_id": oxy_request.node_id,
+                                },
+                            )
+                        if use_openai:
+                            delta = chunk["choices"][0]["delta"].get(
+                                "content", ""
+                            ) or chunk["choices"][0]["delta"].get(
+                                "reasoning_content", ""
+                            )
+                        else:
+                            delta = chunk.get("message", {}).get(
+                                "content", ""
+                            ) or chunk.get("message", {}).get("reasoning_content", "")
                         if delta:
                             result_parts.append(delta)
                             await oxy_request.send_message(
-                                json.dumps({"type": "stream", "content": {"delta": delta}})
+                                {"type": "stream", "content": {"delta": delta}}
                             )
             result = "".join(result_parts)
             return OxyResponse(state=OxyState.COMPLETED, output=result)
@@ -137,8 +149,8 @@ class HttpLLM(RemoteLLM):
             data = http_response.json()
             if "error" in data:
                 error_message = data["error"].get("message", "Unknown error")
-                raise ValueError(f"LLM API error: {error_message}") 
-            if is_gemini:                                    
+                raise ValueError(f"LLM API error: {error_message}")
+            if is_gemini:
                 result = (
                     data["candidates"][0]["content"]["parts"][0].get("text", "")
                     if data.get("candidates")
@@ -151,6 +163,5 @@ class HttpLLM(RemoteLLM):
                 )
             else:  # ollama
                 result = data["message"]["content"]
-            
 
             return OxyResponse(state=OxyState.COMPLETED, output=result)

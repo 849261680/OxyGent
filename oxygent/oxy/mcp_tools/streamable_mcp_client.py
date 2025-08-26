@@ -24,27 +24,51 @@ class StreamableMCPClient(BaseMCPClient):
         default_factory=list, description="Client-side MCP middlewares"
     )
 
-    async def init(self) -> None:
+    async def init(self, is_fetch_tools=True) -> None:
         """Initialize the HTTP streaming connection to the MCP server."""
         try:
-            self._http_transport = await self._exit_stack.enter_async_context(
-                streamablehttp_client(build_url(self.server_url), headers=self.headers)
-            )
-            read, write, _ = self._http_transport
+            if self.is_keep_alive:
+                self._http_transport = await self._exit_stack.enter_async_context(
+                    streamablehttp_client(
+                        build_url(self.server_url), headers=self.headers
+                    )
+                )
+                read, write, _ = self._http_transport
 
-            self._session = await self._exit_stack.enter_async_context(
-                ClientSession(read, write)
-            )
+                self._session = await self._exit_stack.enter_async_context(
+                    ClientSession(read, write)
+                )
 
-            for mw in self.middlewares:
-                if hasattr(self._session, "add_middleware"):
-                    self._session.add_middleware(mw)
-                else:
-                    logger.warning("middleware %s is ignored", mw)
+                for mw in self.middlewares:
+                    if hasattr(self._session, "add_middleware"):
+                        self._session.add_middleware(mw)
+                    else:
+                        logger.warning("middleware %s is ignored", mw)
 
-            await self._session.initialize()
-            await self.list_tools()
+                await self._session.initialize()
+                if is_fetch_tools:
+                    await self.list_tools()
+            else:
+                async with streamablehttp_client(build_url(self.server_url)) as (
+                    read,
+                    write,
+                    _,
+                ):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        tools_response = await session.list_tools()
+                        self.add_tools(tools_response)
         except Exception as e:
             logger.error("Error initializing server %s: %s", self.name, e)
             await self.cleanup()
             raise Exception(f"Server {self.name} error") from e
+
+    async def call_tool(self, tool_name, arguments):
+        async with streamablehttp_client(build_url(self.server_url)) as (
+            read,
+            write,
+            _,
+        ):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                return await session.call_tool(tool_name, arguments)

@@ -97,7 +97,7 @@ class BaseAgent(BaseFlow):
                         "group_id": oxy_request.group_id,
                         "from_trace_id": oxy_request.from_trace_id,
                         "root_trace_ids": oxy_request.root_trace_ids,
-                        "input": oxy_request.arguments,
+                        "input": to_json(oxy_request.arguments),
                         "callee": oxy_request.callee,
                         "output": "",  # Output will be filled in post_save_data
                         "create_time": get_format_time(),

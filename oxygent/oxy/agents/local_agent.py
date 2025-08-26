@@ -61,8 +61,7 @@ class LocalAgent(BaseAgent):
         description="Defaults to 'SYSTEM_PROMPT', the prompt to initialize the agent's behavior.",
     )
     additional_prompt: Optional[str] = Field(
-        default="",
-        description="The prompt add by user, addit to the origin prompt."
+        default="", description="The prompt add by user, addit to the origin prompt."
     )
     sub_agents: Optional[list] = Field(
         default_factory=list,
@@ -90,7 +89,8 @@ class LocalAgent(BaseAgent):
     )
 
     short_memory_size: int = Field(
-        10, description="Number of short-term memory entries to retain"
+        Config.get_agent_short_memory_size(),
+        description="Number of short-term memory entries to retain",
     )
     intent_understanding_agent: Optional[str] = Field(
         None,
@@ -393,11 +393,11 @@ class LocalAgent(BaseAgent):
             )
         oxy_request.arguments["additional_prompt"] = self.additional_prompt
         oxy_request.arguments["tools_description"] = "\n\n".join(llm_tool_desc_list)
-        
+
         # multimodal support
         query_parts = oxy_request.get_query_parts()  # slice a2a style query
-        multimodal_content = []      # LLM content list
-        plain_text_lines = []        # placeholder if the llm not support multimodal
+        multimodal_content = []  # LLM content list
+        plain_text_lines = []  # placeholder if the llm not support multimodal
 
         for p in query_parts:
             part = p.get("part", {})
@@ -409,7 +409,7 @@ class LocalAgent(BaseAgent):
                 plain_text_lines.append(data)
 
             elif ctype in ("url", "path"):
-                # parser url 
+                # parser url
                 multimodal_content.extend(process_attachments([data]))
                 plain_text_lines.append(data)
 
@@ -434,10 +434,9 @@ class LocalAgent(BaseAgent):
                 original_query_text = oxy_request.arguments["query"]
 
                 if self.is_multimodal_supported:
-                    oxy_request.arguments["query"] = (
-                        structured_attachments
-                        + [{"type": "text", "text": original_query_text}]
-                    )
+                    oxy_request.arguments["query"] = structured_attachments + [
+                        {"type": "text", "text": original_query_text}
+                    ]
                 else:
                     attachment_urls = []
                     for att in structured_attachments:

@@ -11,10 +11,11 @@ read/write the new MAS.global_data store from inside an agent.
 
 import asyncio
 
-from oxygent import MAS, oxy, OxyResponse, OxyRequest
+from oxygent import MAS, OxyRequest, OxyResponse, oxy
 from oxygent.oxy.agents.base_agent import BaseAgent
 from oxygent.schemas import OxyState
 from oxygent.utils.env_utils import get_env_var
+
 
 class CounterAgent(BaseAgent):
     async def execute(self, oxy_request: OxyRequest):
@@ -39,10 +40,11 @@ oxy_space = [
         timeout=240,
     ),
     CounterAgent(
-        name="master_agent",   # mark as master so chat_with_agent works
+        name="master_agent",  # mark as master so chat_with_agent works
         is_master=True,
     ),
 ]
+
 
 async def main():
     async with MAS(name="global_demo", oxy_space=oxy_space) as mas:

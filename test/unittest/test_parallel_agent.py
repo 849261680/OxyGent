@@ -2,17 +2,18 @@
 Unit tests for ParallelAgent
 """
 
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
+
 from oxygent.oxy.agents.parallel_agent import ParallelAgent
-from oxygent.oxy.function_tools.function_tool import FunctionTool
 from oxygent.oxy.base_tool import BaseTool
+from oxygent.oxy.function_tools.function_tool import FunctionTool
 from oxygent.schemas import OxyRequest, OxyResponse, OxyState
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# ❶ Dummy MAS 
+# ❶ Dummy MAS
 # ──────────────────────────────────────────────────────────────────────────────
 class DummyMAS:
     def __init__(self):
@@ -57,7 +58,9 @@ class MockLLMTool(BaseTool):
     category: str = "llm"
     is_multimodal_supported: bool = False
 
-    async def _execute(self, oxy_request: OxyRequest) -> OxyResponse:  # pragma: no cover
+    async def _execute(
+        self, oxy_request: OxyRequest
+    ) -> OxyResponse:  # pragma: no cover
         return OxyResponse(
             state=OxyState.COMPLETED, output="stub-llm", oxy_request=oxy_request
         )
@@ -131,12 +134,16 @@ def oxy_request(monkeypatch, mas_env):
                 state=OxyState.COMPLETED, output="result_b", oxy_request=self
             )
         if callee == "mock_llm":
-            outputs = [msg["content"] for msg in arguments["messages"] if msg["role"] == "user"]
+            outputs = [
+                msg["content"] for msg in arguments["messages"] if msg["role"] == "user"
+            ]
             summary = f"summary({'+'.join(outputs)})"
             return OxyResponse(
                 state=OxyState.COMPLETED, output=summary, oxy_request=self
             )
-        return OxyResponse(state=OxyState.FAILED, output="unknown callee", oxy_request=self)
+        return OxyResponse(
+            state=OxyState.FAILED, output="unknown callee", oxy_request=self
+        )
 
     monkeypatch.setattr("oxygent.schemas.OxyRequest.call", _fake_call, raising=True)
     return req

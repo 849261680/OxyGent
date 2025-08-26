@@ -1,9 +1,10 @@
 import asyncio
 import os
 import sys
+
 from pydantic import Field
 
-from oxygent import MAS, OxyRequest, Config, oxy
+from oxygent import MAS, Config, OxyRequest, oxy
 from oxygent.utils.env_utils import get_env_var
 
 Config.load_from_json("./config.json", env="default")

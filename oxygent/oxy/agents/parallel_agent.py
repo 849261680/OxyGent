@@ -62,5 +62,9 @@ Please summarize the results of the parallel execution of the above tasks."""
         # llm call
         return await oxy_request.call(
             callee=self.llm_model,
-            arguments={"messages": temp_memory.to_dict_list()},
+            arguments={
+                "messages": temp_memory.to_dict_list(
+                    short_memory_size=self.short_memory_size
+                )
+            },
         )

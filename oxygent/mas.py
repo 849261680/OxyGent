@@ -23,7 +23,7 @@ import json
 import os
 import traceback
 from collections import OrderedDict
-from typing import Optional
+from typing import Callable, Optional
 
 import msgpack
 import shortuuid
@@ -72,6 +72,8 @@ class MAS(BaseModel):
 
     first_query: str = Field("")
 
+    welcome_message: str = Field(default_factory=Config.get_agent_welcome_message)
+
     agent_organization: dict = Field(default_factory=list)
 
     vearch_client: Optional[VearchDB] = Field(None)
@@ -84,6 +86,10 @@ class MAS(BaseModel):
     event_dict: dict = Field(default_factory=dict)
 
     message_prefix: str = Field("oxygent")
+
+    func_filter: Optional[Callable] = Field(
+        lambda x: x, exclude=True, description="filter function"
+    )
 
     def __init__(self, **kwargs):
         """Construct a new :class:`MAS`.
@@ -344,7 +350,10 @@ class MAS(BaseModel):
             host = redis_config["host"]
             port = redis_config["port"]
             password = redis_config["password"]
-            self.redis_client = JimdbApRedis(host=host, port=port, password=password)
+            db = redis_config.get("db", 0)
+            self.redis_client = JimdbApRedis(
+                host=host, port=port, password=password, db=db
+            )
         else:
             self.redis_client = LocalRedis()
 
@@ -363,7 +372,11 @@ class MAS(BaseModel):
             if not isinstance(oxy, class_type):
                 continue
             oxy.set_mas(self)
-            tasks.append(oxy.init())
+            task = oxy.init()
+            if Config.get_tool_is_concurrent_init():
+                tasks.append(task)
+            else:
+                await task
         if tasks:
             await asyncio.gather(*tasks)
 
@@ -555,7 +568,8 @@ class MAS(BaseModel):
             message: Any serialisable Python object.
             redis_key: Target Redis key (usually ``mas_msg:{app}:{trace_id}``).
         """
-
+        if Config.get_message_is_show_in_terminal():
+            logger.info(message)
         bytes_msg = msgpack.packb(msgpack_preprocess(message))
         if Config.get_message_is_stored():
             parts = redis_key.split(":")
@@ -574,7 +588,7 @@ class MAS(BaseModel):
             await self.es_client.index(
                 index=Config.get_app_name() + "_message", body=message_doc
             )
-        await self.redis_client.lpush(redis_key, bytes_msg, max_size=10)
+        await self.redis_client.lpush(redis_key, bytes_msg)
 
     async def chat_with_agent(
         self,
@@ -599,6 +613,7 @@ class MAS(BaseModel):
             OxyResponse: Fully populated response object.
         """
         try:
+            payload = self.func_filter(payload)
             # distinct attachments
             if "attachments" in payload and payload["attachments"]:
                 atts, remotes = [], []
@@ -691,13 +706,13 @@ class MAS(BaseModel):
             if not oxy_request.callee:
                 oxy_request.callee = self.master_agent_name
 
-            answer = await oxy_request.start()
+            oxy_response = await oxy_request.start()
 
             if send_msg_key:
                 await self.send_message(
                     {"event": "close", "data": "done"}, send_msg_key
                 )
-            return answer
+            return oxy_response
         except Exception:
             logger.error(traceback.format_exc())
             raise
@@ -726,7 +741,7 @@ class MAS(BaseModel):
             payload = {"query": query, "from_trace_id": from_trace_id}
             oxy_response = await self.chat_with_agent(payload=payload)
             from_trace_id = oxy_response.oxy_request.current_trace_id
-            # print("LLM: ", oxy_response.output)
+            print("LLM: ", oxy_response.output)
 
     # ------------------------------------------------------------------
     # FastAPI + SSE web service (unedited original docstring preserved)
@@ -780,13 +795,17 @@ class MAS(BaseModel):
             self.active_tasks[current_trace_id].cancel()
             raise
 
-    async def start_web_service(self, first_query=None, host=None, port=None):
+    async def start_web_service(
+        self, first_query=None, welcome_message=None, host=None, port=None
+    ):
         """Start the FastAPI + SSE service (see original inline documentation)."""
 
         if not self.master_agent_name:
             logger.warning("No agent was registered.")
 
         self.first_query = first_query  # First query would be displayed in the frontend
+        if welcome_message:
+            self.welcome_message = welcome_message
         if host is None:
             host = Config.get_server_host()
         if port is None:
@@ -877,8 +896,17 @@ class MAS(BaseModel):
                 data={"first_query": self.first_query if self.first_query else ""}
             ).to_dict()
 
-        @app.api_route("/sse/chat", methods=["GET", "POST"])
-        async def sse_chat(request: Request):
+        @app.get("/get_welcome_message")
+        def get_welcome_message():
+            return WebResponse(
+                data={
+                    "welcome_message": self.welcome_message
+                    if self.welcome_message
+                    else ""
+                }
+            ).to_dict()
+
+        async def request_to_payload(request: Request):
             if request.method == "GET":
                 params = dict(request.query_params)
                 payload = dict()
@@ -893,7 +921,7 @@ class MAS(BaseModel):
                 payload = await request.json()
 
             if "query" not in payload:
-                return WebResponse(code=400, message="query is required").to_dict()
+                payload["query"] = ""
 
             if "attachments" in payload:
                 attachments_with_path = []
@@ -927,6 +955,18 @@ class MAS(BaseModel):
 
             if "current_trace_id" not in payload:
                 payload["current_trace_id"] = shortuuid.ShortUUID().random(length=16)
+
+            return payload
+
+        @app.api_route("/chat", methods=["GET", "POST"])
+        async def chat(request: Request):
+            payload = await request_to_payload(request)
+            oxy_response = await self.chat_with_agent(payload=payload)
+            return oxy_response.output
+
+        @app.api_route("/sse/chat", methods=["GET", "POST"])
+        async def sse_chat(request: Request):
+            payload = await request_to_payload(request)
             current_trace_id = payload["current_trace_id"]
 
             logger.info(

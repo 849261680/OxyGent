@@ -1,8 +1,8 @@
 import os
-import json
+
 # import pandas as pd
-from typing import Union
 from pydantic import Field
+
 from oxygent.oxy import FunctionHub
 
 file_tools = FunctionHub(name="file_tools")
@@ -37,6 +37,7 @@ def delete_file(path: str = Field(description="Path to the file to delete")) -> 
         return f"Error: The file at {path} does not exist."
     os.remove(path)
     return f"Successfully deleted the file at {path}"
+
 
 # @file_tools.tool(
 #     description="Read plain text from a Word document (.doc/.docx). "

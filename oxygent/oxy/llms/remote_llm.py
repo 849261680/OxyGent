@@ -2,7 +2,6 @@ from typing import Optional
 
 from pydantic import Field, field_validator
 
-
 from ...schemas import OxyRequest, OxyResponse
 from .base_llm import BaseLLM
 

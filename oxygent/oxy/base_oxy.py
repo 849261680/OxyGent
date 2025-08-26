@@ -103,6 +103,10 @@ class Oxy(BaseModel, ABC):
         None, exclude=True, description="Execution function"
     )
 
+    func_interceptor: Optional[Callable] = Field(
+        None, exclude=True, description="Interceptor function"
+    )
+
     mas: Optional[Any] = Field(None, exclude=True, description="MAS instance reference")
 
     friendly_error_text: Optional[str] = Field(
@@ -341,6 +345,12 @@ class Oxy(BaseModel, ABC):
         """Send tool call message to frontend if enabled."""
         # Send tool_call message to frontend
         if self.is_send_tool_call:
+            if Config.get_message_is_send_full_arguments():
+                arguments = filter_json_types(oxy_request.arguments)
+            else:
+                arguments = {
+                    k: v for k, v in oxy_request.arguments.items() if k in ["query"]
+                }
             await oxy_request.send_message(
                 {
                     "type": "tool_call",
@@ -351,7 +361,7 @@ class Oxy(BaseModel, ABC):
                         "caller_category": oxy_request.caller_category,
                         "callee_category": oxy_request.callee_category,
                         "call_stack": oxy_request.call_stack,
-                        "arguments": filter_json_types(oxy_request.arguments),
+                        "arguments": arguments,
                         "request_id": oxy_request.request_id,
                     },
                 }
@@ -527,6 +537,14 @@ class Oxy(BaseModel, ABC):
             attempt = 0
             while attempt < self.retries:
                 try:
+                    if self.func_interceptor:
+                        error_message = await self.func_interceptor(oxy_request)
+                        if error_message:
+                            oxy_response = OxyResponse(
+                                state=OxyState.SKIPPED,
+                                output=error_message,
+                            )
+                            break
                     if self.func_execute:
                         oxy_response = await self.func_execute(oxy_request)
                     else:

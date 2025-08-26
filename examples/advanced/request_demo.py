@@ -1,8 +1,12 @@
 import os
+
 from oxygent import MAS, Config, oxy
 from oxygent.preset_tools.request_tools import request_tools
 
 Config.set_agent_llm_model("default_llm")
+Config.set_es_schema_shared_data(
+    {"conversation_step": {"type": "keyword"}, "user_id": {"type": "keyword"}}
+)
 
 oxy_space = [
     oxy.HttpLLM(

@@ -5,9 +5,6 @@
 """
 
 from urllib.parse import urlparse
-from pydantic import Field
-
-from .core import mcp, _browser, _pages, _operation_in_progress, _data_ready
 
 
 async def _get_domain_from_url(url):

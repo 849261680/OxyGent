@@ -1,10 +1,9 @@
 """Demo for testing group_id behavior in OxyGent MAS."""
 
 import asyncio
-import shortuuid
-from oxygent import MAS, oxy, Config
-from oxygent.utils.env_utils import get_env_var
 
+from oxygent import MAS, oxy
+from oxygent.utils.env_utils import get_env_var
 
 oxy_space = [
     oxy.HttpLLM(
@@ -27,7 +26,7 @@ oxy_space = [
 async def main():
     async with MAS(oxy_space=oxy_space) as mas:
         gid = "group_test_001"
-        
+
         first_resp = await mas.chat_with_agent(
             {
                 "query": "what is AI?",

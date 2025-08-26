@@ -154,7 +154,8 @@ async def main():
     """
     async with MAS(oxy_space=oxy_space) as mas:
         await mas.start_web_service(
-            first_query="Please calculate the 20 positions of Pi"
+            first_query="Please calculate the 20 positions of Pi",
+            welcome_message="Hi, I’m OxyGent. How can I assist you?",
         )
 
 

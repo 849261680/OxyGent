@@ -1,10 +1,12 @@
 import asyncio
 import json
+
 from oxygent import MAS, Config, OxyRequest, OxyResponse, oxy
+from oxygent.preset_tools import file_tools
 from oxygent.schemas import LLMResponse, LLMState
 from oxygent.utils.common_utils import extract_first_json
 from oxygent.utils.env_utils import get_env_var
-from oxygent.preset_tools import file_tools
+
 
 def func_parse_llm_response(ori_response: str, oxy_request: OxyRequest) -> LLMResponse:
     try:
@@ -47,7 +49,7 @@ async def master_file_workflow(oxy_request: OxyRequest) -> OxyResponse:
     return resp.output
 
 
-Config.set_agent_llm_model("default_chat") 
+Config.set_agent_llm_model("default_chat")
 
 oxy_space = [
     oxy.HttpLLM(
@@ -61,7 +63,7 @@ oxy_space = [
     oxy.ReActAgent(
         name="file_react_agent",
         llm_name="default_chat",
-        tools=["file_tools"], # make sure the docx tools is avaliable
+        tools=["file_tools"],  # make sure the docx tools is avaliable
         func_parse_llm_response=func_parse_llm_response,
     ),
     oxy.Workflow(
@@ -72,6 +74,7 @@ oxy_space = [
     ),
 ]
 
+
 async def main():
     async with MAS(oxy_space=oxy_space) as mas:
         payload = {
@@ -81,12 +84,12 @@ async def main():
         oxy_response = await mas.chat_with_agent(payload=payload)
         print("LLM: ", oxy_response.output)
 
+
 async def web():
     async with MAS(oxy_space=oxy_space) as mas:
-        await mas.start_web_service(
-            first_query='Introduce the content of the file'
-        )
- 
+        await mas.start_web_service(first_query="Introduce the content of the file")
+
+
 if __name__ == "__main__":
-    #asyncio.run(main())
+    # asyncio.run(main())
     asyncio.run(web())

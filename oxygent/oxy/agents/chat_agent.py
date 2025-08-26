@@ -12,6 +12,13 @@ from .local_agent import LocalAgent
 class ChatAgent(LocalAgent):
     """A conversational agent that manages chat interactions with language models."""
 
+    def __init__(self, **kwargs):
+        """Initialize the Chat agent with appropriate prompt and parsing function."""
+        super().__init__(**kwargs)
+
+        if not self.prompt:
+            self.prompt = "You are a helpful assistant."
+
     async def _execute(self, oxy_request: OxyRequest) -> OxyResponse:
         """Execute a chat interaction with the language model.
 
@@ -38,7 +45,11 @@ class ChatAgent(LocalAgent):
         temp_memory.add_message(Message.user_message(oxy_request.get_query()))
 
         # Prepare arguments for the language model call
-        arguments = {"messages": temp_memory.to_dict_list()}
+        arguments = {
+            "messages": temp_memory.to_dict_list(
+                short_memory_size=self.short_memory_size
+            )
+        }
         llm_params = oxy_request.arguments.get("llm_params", dict())
         arguments.update(llm_params)
 

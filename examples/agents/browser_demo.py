@@ -1,17 +1,18 @@
 """Demo for using OxyGent with browser tools."""
 
 import asyncio
-import os
 import logging
-from typing import Dict, Any
+import os
+from typing import Any, Dict
+
 from oxygent import MAS, Config, oxy
 
 # 配置日志
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
+
 
 # 从环境变量加载配置
 def load_config() -> Dict[str, Any]:
@@ -19,22 +20,25 @@ def load_config() -> Dict[str, Any]:
     required_vars = [
         "DEFAULT_LLM_API_KEY",
         "DEFAULT_LLM_BASE_URL",
-        "DEFAULT_LLM_MODEL_NAME"
+        "DEFAULT_LLM_MODEL_NAME",
     ]
-    
+
     config = {}
     missing_vars = []
-    
+
     for var in required_vars:
         value = os.getenv(var)
         if value is None:
             missing_vars.append(var)
         config[var] = value
-    
+
     if missing_vars:
-        raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
-    
+        raise ValueError(
+            f"Missing required environment variables: {', '.join(missing_vars)}"
+        )
+
     return config
+
 
 # Master-specific system prompt
 MASTER_SYSTEM_PROMPT = """
@@ -308,9 +312,10 @@ After receiving tool response:
 Please only use the tools explicitly defined above.
 """
 
+
 class BrowserDemo:
     """Browser demo implementation class."""
-    
+
     def __init__(self):
         """Initialize the browser demo with configuration."""
         try:
@@ -330,7 +335,7 @@ class BrowserDemo:
                 self._create_filesystem_tools(),
                 self._create_browser_agent(),
                 self._create_file_agent(),
-                self._create_master_agent()
+                self._create_master_agent(),
             ]
         except Exception as e:
             logger.error(f"Failed to create oxy space: {str(e)}")
@@ -377,7 +382,7 @@ class BrowserDemo:
             retries=3,
             delay=1,
             friendly_error_text="Browser operation failed",
-            semaphore=2
+            semaphore=2,
         )
 
     def _create_filesystem_tools(self) -> oxy.StdioMCPClient:
@@ -386,7 +391,11 @@ class BrowserDemo:
             name="filesystem",
             params={
                 "command": "npx",
-                "args": ["-y", "@modelcontextprotocol/server-filesystem", "./local_file"],
+                "args": [
+                    "-y",
+                    "@modelcontextprotocol/server-filesystem",
+                    "./local_file",
+                ],
             },
             category="tool",
             class_name="StdioMCPClient",
@@ -399,7 +408,7 @@ class BrowserDemo:
             retries=3,
             delay=1,
             friendly_error_text="File system operation failed",
-            semaphore=2
+            semaphore=2,
         )
 
     def _create_browser_agent(self) -> oxy.ReActAgent:
@@ -420,7 +429,7 @@ class BrowserDemo:
             retries=3,
             delay=1,
             is_multimodal_supported=False,
-            semaphore=2
+            semaphore=2,
         )
 
     def _create_file_agent(self) -> oxy.ReActAgent:
@@ -441,7 +450,7 @@ class BrowserDemo:
             retries=3,
             delay=1,
             is_multimodal_supported=False,
-            semaphore=2
+            semaphore=2,
         )
 
     def _create_master_agent(self) -> oxy.ReActAgent:
@@ -463,10 +472,13 @@ class BrowserDemo:
             retries=3,
             delay=1,
             is_multimodal_supported=False,
-            semaphore=2
+            semaphore=2,
         )
 
-    async def run_demo(self, query: str = "搜索'武汉市天气'，提取搜索结果的天气概览数据保存到`./local_file/weather.txt`"):
+    async def run_demo(
+        self,
+        query: str = "搜索'武汉市天气'，提取搜索结果的天气概览数据保存到`./local_file/weather.txt`",
+    ):
         """Run the browser demo with the specified query."""
         try:
             async with MAS(oxy_space=self.oxy_space) as mas:
@@ -477,6 +489,7 @@ class BrowserDemo:
             logger.error(f"Error running browser demo: {str(e)}")
             raise
 
+
 async def main():
     """Main entry point for the browser demo."""
     try:
@@ -485,6 +498,7 @@ async def main():
     except Exception as e:
         logger.error(f"Fatal error in main: {str(e)}")
         raise
+
 
 if __name__ == "__main__":
     asyncio.run(main())

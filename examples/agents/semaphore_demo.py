@@ -1,5 +1,6 @@
 import asyncio
-from oxygent import oxy, MAS
+
+from oxygent import MAS, oxy
 from oxygent.utils.env_utils import get_env_var
 
 oxy_space = [

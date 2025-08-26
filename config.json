@@ -30,17 +30,21 @@
             "is_send_observation": true,
             "is_send_think": false,
             "is_send_answer": true,
-            "is_stored": false
+            "is_stored": false,
+            "is_show_in_terminal": false,
+            "is_send_full_arguments": false
         },
         "vearch": {},
         "es": {},
-        "schema": {
-            "shared_data": {
-                "conversation_step": { "type": "keyword" },
-                "user_id": { "type": "keyword" }
-            }
+        "es_schema": {
+            "shared_data": {}
         },
         "redis": {},
+        "redis_param": {
+            "expire_time": 86400,
+            "max_size": 1024,
+            "max_length": 20480
+        },
         "server": {
             "host": "127.0.0.1",
             "port": 8080,
@@ -54,6 +58,10 @@
                 "properties": {"query": {"description": "Query question"}},
                 "required": ["query"]
             }
+        },
+        "tool": {
+            "mcp_is_keep_alive": true, 
+            "is_concurrent_init": true
         }
     },
     "dev": {
@@ -68,6 +76,12 @@
             ],
             "user": "${ES_TEST_USER}",
             "password": "${ES_TEST_PASSWORD}"
+        },
+        "redis": {
+            "host": "${REDIS_HOST}",
+            "port": 5360,
+            "password": "${REDIS_TEST_PASSWORD}",
+            "db": 0
         }
     },
     "test": {

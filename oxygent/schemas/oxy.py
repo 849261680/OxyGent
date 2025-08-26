@@ -96,7 +96,12 @@ class OxyRequest(BaseModel):
 
     is_save_history: bool = Field(True, description="whether history is saved")
 
-    shared_data: dict = Field(default_factory=dict)
+    shared_data: dict = Field(
+        default_factory=dict, description="public data in the scope of a single request"
+    )
+    group_data: dict = Field(
+        default_factory=dict, description="public data in the scope of a session group"
+    )
     parallel_id: Optional[str] = Field("", description="")
     parallel_dict: Optional[dict] = Field(default_factory=dict, description="")
 
@@ -403,6 +408,10 @@ class OxyRequest(BaseModel):
     def set_group_id(self, request_id: str):
         """Manually override the group_id."""
         self.group_id = request_id
+
+    async def break_task(self):
+        await self.send_message({"event": "close", "data": "done"})
+        self.mas.active_tasks[self.current_trace_id].cancel()
 
 
 class OxyResponse(BaseModel):

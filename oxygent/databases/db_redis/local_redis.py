@@ -10,6 +10,8 @@ import time
 from collections import deque
 from typing import Dict, Union
 
+from ...config import Config
+
 
 class LocalRedis:
     """Local in-memory implementation of Redis-like key-value store.
@@ -28,8 +30,9 @@ class LocalRedis:
     def __init__(self):
         self.data: Dict[str, deque] = {}
         self.expiry: Dict[str, float] = {}
-        self.default_expire_time = 86400  # Default TTL: 1 day
-        self.default_list_max_size = 10
+        self.default_expire_time = Config.get_redis_expire_time()
+        self.default_list_max_size = Config.get_redis_max_size()
+        self.default_list_max_length = Config.get_redis_max_length() * 1024
 
     async def lpush(
         self,
@@ -37,7 +40,7 @@ class LocalRedis:
         *values: Union[bytes, int, str, float, dict],
         ex: int = None,
         max_size: int = None,
-        max_length: int = 81920,
+        max_length: int = None,
     ) -> int:
         """Push one or more values to the left (head) of a list.
 
@@ -50,7 +53,7 @@ class LocalRedis:
             *values: One or more values to push (single or multiple types)
             ex: Expiration time in seconds (default: 1 day)
             max_size: Maximum number of elements in the list (default: uses default_list_max_size)
-            max_length: Maximum length for string/bytes values (default: 81920)
+            max_length: Maximum length for string/bytes values (default: 20MB)
 
         Returns:
             int: The length of the list after the push operation
@@ -68,6 +71,8 @@ class LocalRedis:
             ex = self.default_expire_time
         if max_size is None:
             max_size = self.default_list_max_size
+        if max_length is None:
+            max_length = self.default_list_max_length
 
         if key not in self.data:
             self.data[key] = deque(

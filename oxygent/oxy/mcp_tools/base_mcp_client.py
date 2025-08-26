@@ -10,9 +10,11 @@ import logging
 from contextlib import AsyncExitStack
 from typing import Any
 
+import anyio
 from mcp import ClientSession
 from pydantic import Field
 
+from ...config import Config
 from ...schemas import OxyRequest, OxyResponse, OxyState
 from ..base_tool import BaseTool
 from .mcp_tool import MCPTool
@@ -32,6 +34,7 @@ class BaseMCPClient(BaseTool):
     """
 
     included_tool_name_list: list = Field(default_factory=list)
+    is_keep_alive: bool = Field(default_factory=Config.get_tool_mcp_is_keep_alive)
 
     def __init__(self, **kwargs):
         """Initialize the MCP client with necessary resources.
@@ -48,15 +51,19 @@ class BaseMCPClient(BaseTool):
     async def list_tools(self) -> None:
         """Discover and register tools from the MCP server.
 
-        Connects to the MCP server, retrieves the list of available tools, and
-        dynamically creates MCPTool instances for each discovered tool. These tools are
-        then registered with the MAS for use by agents.
+        Connects to the MCP server, retrieves the list of available tools
         """
         if not self._session:
             raise RuntimeError(f"Server {self.name} not initialized")
 
         tools_response = await self._session.list_tools()
+        self.add_tools(tools_response)
 
+    def add_tools(self, tools_response) -> None:
+        """
+        dynamically creates MCPTool instances for each discovered tool. These tools are
+        then registered with the MAS for use by agents.
+        """
         params = self.model_dump(
             exclude={
                 "sse_url",
@@ -95,10 +102,22 @@ class BaseMCPClient(BaseTool):
         the MCP protocol.
         """
         tool_name = oxy_request.callee
-        if not self._session:
-            raise RuntimeError(f"Server {self.name} not initialized")
 
-        mcp_response = await self._session.call_tool(tool_name, oxy_request.arguments)
+        if self.is_keep_alive:
+            if not self._session:
+                raise RuntimeError(f"Server {self.name} not initialized")
+
+            try:
+                mcp_response = await self._session.call_tool(
+                    tool_name, oxy_request.arguments
+                )
+            except anyio.ClosedResourceError:
+                await self.init(is_fetch_tools=False)  # TODO: refetch tools
+                mcp_response = await self._session.call_tool(
+                    tool_name, oxy_request.arguments
+                )
+        else:
+            mcp_response = await self.call_tool(tool_name, oxy_request.arguments)
         # TODO: Handle result objects and progress tracking
         results = [content.text.strip() for content in mcp_response.content]
         return OxyResponse(

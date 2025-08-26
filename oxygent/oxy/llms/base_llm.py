@@ -13,7 +13,12 @@ from typing import Optional
 from pydantic import Field
 
 from ...schemas import OxyRequest, OxyResponse
-from ...utils.common_utils import extract_first_json, image_to_base64, video_to_base64, file_to_base64
+from ...utils.common_utils import (
+    extract_first_json,
+    file_to_base64,
+    image_to_base64,
+    video_to_base64,
+)
 from ..base_oxy import Oxy
 
 logger = logging.getLogger(__name__)
@@ -96,7 +101,7 @@ class BaseLLM(Oxy):
 
         for message in messages_processed:
             if not isinstance(message.get("content"), list):
-                continue  
+                continue
 
             for item in message["content"]:
                 item_type = item.get("type")

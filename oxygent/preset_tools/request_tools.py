@@ -1,5 +1,6 @@
-from oxygent.oxy import FunctionHub
 from pydantic import Field
+
+from oxygent.oxy import FunctionHub
 from oxygent.schemas import OxyRequest
 
 request_tools = FunctionHub(name="request_tools")

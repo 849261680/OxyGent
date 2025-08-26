@@ -108,11 +108,11 @@ class ReActAgent(LocalAgent):
 
     def _default_reflexion(self, response: str, oxy_request: OxyRequest) -> str:
         """Default reflexion function that checks if response is empty or invalid.
-        
+
         Args:
             response (str): The agent's response to evaluate
             oxy_request (OxyRequest): The current request context
-            
+
         Returns:
             reflection_message (str): Feedback message for improvement (used when is_acceptable=False)
         """
@@ -233,7 +233,9 @@ class ReActAgent(LocalAgent):
                     short_memory.add_message(Message.assistant_message(short_a_message))
         return short_memory
 
-    def _parse_llm_response(self, ori_response: str, oxy_request: OxyRequest = None) -> LLMResponse:
+    def _parse_llm_response(
+        self, ori_response: str, oxy_request: OxyRequest = None
+    ) -> LLMResponse:
         """Parse LLM response to determine next action.
 
         This method handles various LLM output formats and determines whether
@@ -304,25 +306,25 @@ class ReActAgent(LocalAgent):
         Returns:
             OxyResponse: Final response with answer and ReAct memory trace.
         """
-        
         def _plain_text(q):
-            """ list/dict query -> str"""
+            """list/dict query -> str"""
             if isinstance(q, list):
                 buf = []
                 for it in q:
-                    if "type" in it:                   # OpenAI content format
+                    if "type" in it:  # OpenAI content format
                         if it["type"] == "text":
                             buf.append(it["text"])
                         else:
                             # image_url / video_url / file_url : empty for hold order
                             buf.append(f"[{it['type']}]")
-                    elif "part" in it:                 # A2A parts
+                    elif "part" in it:  # A2A parts
                         buf.append(str(it["part"].get("data", "")))
                     else:
                         buf.append(str(it))
                 return " ".join(buf)
             return str(q)
-        react_memory = Memory()        
+
+        react_memory = Memory()
         for current_round in range(self.max_react_rounds + 1):
             # Build complete message context: instruction + short memory + query + react memory
             temp_memory = Memory()
@@ -341,11 +343,15 @@ class ReActAgent(LocalAgent):
             temp_memory.add_message(Message.user_message(user_query_content))
             temp_memory.add_messages(react_memory.messages)
 
+            full_memory = temp_memory.to_dict_list()
             oxy_response = await oxy_request.call(
                 callee=self.llm_model,
-                arguments={"messages": temp_memory.to_dict_list()},
+                arguments={"messages": full_memory},
             )
-            llm_response = self.func_parse_llm_response(oxy_response.output, oxy_request)
+            oxy_request.arguments["full_memory"] = full_memory
+            llm_response = self.func_parse_llm_response(
+                oxy_response.output, oxy_request
+            )
 
             # Execute based on LLM decision
             if llm_response.state is LLMState.ANSWER:
@@ -395,7 +401,9 @@ class ReActAgent(LocalAgent):
                         "trust_mode" in llm_response.output
                         and llm_response.output["trust_mode"] == 1
                     ):
-                        result_payload = observation.to_content(self.is_multimodal_supported)
+                        result_payload = observation.to_content(
+                            self.is_multimodal_supported
+                        )
                         return OxyResponse(
                             state=OxyState.COMPLETED,
                             output=result_payload,
@@ -437,10 +445,8 @@ class ReActAgent(LocalAgent):
         tool_call_results = "\n\n".join(tool_call_results)
 
         # Generate final answer based on accumulated results
-        user_input_text = _plain_text(raw_query) # query -> str
-        user_input_with_results = (
-            f"User question: {user_input_text}\n---\nTool execution results: {tool_call_results}"
-        )
+        user_input_text = _plain_text(raw_query)  # query -> str
+        user_input_with_results = f"User question: {user_input_text}\n---\nTool execution results: {tool_call_results}"
         temp_messages = [
             Message.system_message(
                 "Please answer the user's question based on the given tool execution results."

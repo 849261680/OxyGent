@@ -1,4 +1,5 @@
 import os
+
 from oxygent import MAS, Config, oxy, preset_tools
 
 Config.set_agent_llm_model("default_llm")
@@ -10,8 +11,6 @@ oxy_space = [
         api_key=os.getenv("DEFAULT_LLM_API_KEY"),
         base_url=os.getenv("DEFAULT_LLM_BASE_URL"),
         model_name=os.getenv("DEFAULT_LLM_MODEL_NAME"),
-        llm_params={"temperature": 0.01},
-        semaphore=4,
     ),
     preset_tools.time_tools,
     oxy.ReActAgent(

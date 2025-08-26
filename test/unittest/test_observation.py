@@ -4,12 +4,12 @@ Unit tests for Observation & ExecResult
 
 import pytest
 
-from oxygent.schemas.observation import Observation, ExecResult
-from oxygent.schemas.oxy import OxyResponse, OxyState, OxyOutput
+from oxygent.schemas.observation import ExecResult, Observation
+from oxygent.schemas.oxy import OxyOutput, OxyResponse, OxyState
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Fixtures 
+# Fixtures
 # ──────────────────────────────────────────────────────────────────────────────
 @pytest.fixture(autouse=True)
 def monkey_common_utils(monkeypatch):
@@ -53,9 +53,7 @@ def test_add_exec_result_and_to_str():
 def test_to_content_multimodal_false():
     obs = Observation(
         exec_results=[
-            ExecResult(
-                executor="tool1", oxy_response=make_oxy_resp("plain-result")
-            )
+            ExecResult(executor="tool1", oxy_response=make_oxy_resp("plain-result"))
         ]
     )
     content = obs.to_content(is_multimodal_supported=False)
@@ -67,9 +65,7 @@ def test_to_content_multimodal_true():
     oxy_out = OxyOutput(result="see img", attachments=["http://img.png"])
     obs = Observation(
         exec_results=[
-            ExecResult(
-                executor="img_tool", oxy_response=make_oxy_resp(oxy_out)
-            )
+            ExecResult(executor="img_tool", oxy_response=make_oxy_resp(oxy_out))
         ]
     )
     content = obs.to_content(is_multimodal_supported=True)

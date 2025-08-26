@@ -66,11 +66,18 @@ class Config:
             "is_send_think": False,
             "is_send_answer": True,
             "is_stored": False,
+            "is_show_in_terminal": False,
+            "is_send_full_arguments": False,
         },
         "vearch": {},
         "es": {},
         "es_schema": {"shared_data": {}},
         "redis": {},
+        "redis_param": {
+            "expire_time": 86400,  # 24 hours 60 * 60 * 24
+            "max_size": 1024,
+            "max_length": 20480,  # 20MB
+        },
         "server": {
             "host": "127.0.0.1",
             "port": 8080,
@@ -84,7 +91,10 @@ class Config:
                 "properties": {"query": {"description": "Query question"}},
                 "required": ["query"],
             },
+            "short_memory_size": 10,
+            "welcome_message": "Hi, I’m OxyGent. How can I assist you?",
         },
+        "tool": {"mcp_is_keep_alive": True, "is_concurrent_init": True},
     }
 
     @classmethod
@@ -336,6 +346,24 @@ class Config:
     def get_message_is_stored(cls):
         return cls.get_module_config("message", "is_stored")
 
+    @classmethod
+    def set_message_is_show_in_terminal(cls, is_show_in_terminal=True):
+        cls.set_module_config("message", "is_show_in_terminal", is_show_in_terminal)
+
+    @classmethod
+    def get_message_is_show_in_terminal(cls):
+        return cls.get_module_config("message", "is_show_in_terminal")
+
+    @classmethod
+    def set_message_is_send_full_arguments(cls, is_send_full_arguments=True):
+        cls.set_module_config(
+            "message", "is_send_full_arguments", is_send_full_arguments
+        )
+
+    @classmethod
+    def get_message_is_send_full_arguments(cls):
+        return cls.get_module_config("message", "is_send_full_arguments")
+
     """ es """
 
     @classmethod
@@ -387,6 +415,30 @@ class Config:
     @classmethod
     def get_redis_config(cls):
         return cls.get_module_config("redis")
+
+    @classmethod
+    def set_redis_expire_time(cls, expire_time):
+        cls.set_module_config("redis_param", "expire_time", expire_time)
+
+    @classmethod
+    def get_redis_expire_time(cls):
+        return cls.get_module_config("redis_param", "expire_time")
+
+    @classmethod
+    def set_redis_max_size(cls, max_size):
+        cls.set_module_config("redis_param", "max_size", max_size)
+
+    @classmethod
+    def get_redis_max_size(cls):
+        return cls.get_module_config("redis_param", "max_size")
+
+    @classmethod
+    def set_redis_max_length(cls, max_length):
+        cls.set_module_config("redis_param", "max_length", max_length)
+
+    @classmethod
+    def get_redis_max_length(cls):
+        return cls.get_module_config("redis_param", "max_length")
 
     """ server """
 
@@ -471,3 +523,45 @@ class Config:
     @classmethod
     def get_agent_input_schema(cls):
         return cls.get_module_config("agent", "input_schema")
+
+    @classmethod
+    def set_agent_short_memory_size(cls, short_memory_size):
+        cls.set_module_config("agent", "short_memory_size", short_memory_size)
+
+    @classmethod
+    def get_agent_short_memory_size(cls):
+        return cls.get_module_config("agent", "short_memory_size")
+
+    @classmethod
+    def set_agent_welcome_message(cls, welcome_message):
+        cls.set_module_config("agent", "welcome_message", welcome_message)
+
+    @classmethod
+    def get_agent_welcome_message(cls):
+        return cls.get_module_config("agent", "welcome_message")
+
+    """ tool """
+
+    @classmethod
+    def set_tool_config(cls, tool_config):
+        cls.set_module_config("tool", tool_config)
+
+    @classmethod
+    def get_tool_config(cls):
+        return cls.get_module_config("tool")
+
+    @classmethod
+    def set_tool_mcp_is_keep_alive(cls, mcp_is_keep_alive):
+        cls.set_module_config("tool", "mcp_is_keep_alive", mcp_is_keep_alive)
+
+    @classmethod
+    def get_tool_mcp_is_keep_alive(cls):
+        return cls.get_module_config("tool", "mcp_is_keep_alive")
+
+    @classmethod
+    def set_tool_is_concurrent_init(cls, is_concurrent_init):
+        cls.set_module_config("tool", "is_concurrent_init", is_concurrent_init)
+
+    @classmethod
+    def get_tool_is_concurrent_init(cls):
+        return cls.get_module_config("tool", "is_concurrent_init")

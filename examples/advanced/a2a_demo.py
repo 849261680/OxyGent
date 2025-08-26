@@ -5,11 +5,12 @@ a2a_demo.py
 
 import asyncio
 import json
+
 from oxygent import MAS, Config, OxyRequest, OxyResponse, oxy
+from oxygent.preset_tools import file_tools
 from oxygent.schemas import LLMResponse, LLMState
 from oxygent.utils.common_utils import extract_first_json
 from oxygent.utils.env_utils import get_env_var
-from oxygent.preset_tools import file_tools
 
 
 # ---------- LLM parser ----------
@@ -66,11 +67,13 @@ oxy_space = [
         model_name=get_env_var("DEFAULT_LLM_MODEL_NAME"),
         llm_params={"temperature": 0.3, "max_tokens": 2048},
     ),
-    file_tools,  
+    file_tools,
     oxy.ReActAgent(
         name="file_react_agent",
         llm_name="default_chat",
-        tools=["file_tools"], # you need to import docx or use other way to read docx file
+        tools=[
+            "file_tools"
+        ],  # you need to import docx or use other way to read docx file
         func_parse_llm_response=func_parse_llm_response,
     ),
     oxy.Workflow(
@@ -81,11 +84,12 @@ oxy_space = [
     ),
 ]
 
+
 async def main():
     a2a_parts = [
         {
             "part": {
-                "content_type": "path",       
+                "content_type": "path",
                 "data": "sample.docx",
             }
         },
@@ -99,8 +103,9 @@ async def main():
 
     async with MAS(oxy_space=oxy_space) as mas:
         payload = {
-            "query": a2a_parts,            # a2a style
-            "attachments": ["sample.docx"],  } # Anthropic style
+            "query": a2a_parts,  # a2a style
+            "attachments": ["sample.docx"],
+        }  # Anthropic style
         oxy_resp = await mas.chat_with_agent(payload=payload)
         print("LLM:\n", oxy_resp.output)
 

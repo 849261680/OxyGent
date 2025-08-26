@@ -5,7 +5,6 @@ import asyncio
 from oxygent import MAS, oxy
 from oxygent.utils.env_utils import get_env_var
 
-
 oxy_space = [
     oxy.HttpLLM(
         name="default_llm",

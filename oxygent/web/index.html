@@ -16,7 +16,7 @@
     <link rel="stylesheet" href="./css/agent-list.css?time=2"/>
     <script src="https://code.jquery.com/jquery-1.10.2.js"></script>
     <script src="./js/utils.js?time=2"></script>
-    <script src="js/marked.min.js?time=2"></script>
+    <script src="./js/marked.min.js?time=2"></script>
     <script src="./js/agent_tree.js?time=2"></script>
     <script src="./js/cascader.js?time=2"></script>
     <script src="./js/upload.js?time=2"></script>
@@ -319,20 +319,42 @@
     };
 
     $(document).ready(function () {
-        $.ajax({
-            type: "GET",
-            url: "../get_organization",
-            success: function (response) {
-                response = response.data;
-                // console.log('response', response);
-                agent_id_dict = response.id_dict;
-                agent_organization = response.organization;
-                master_agent_name = response.organization.name;
-                init_chat_box();
-                init_organization();
-                renderChatAtAgentList();
-            }
-        })
+        var ajax1 = $.ajax({ url: "../get_organization", type: "GET" });
+        var ajax2 = $.ajax({ url: "../get_welcome_message", type: "GET" });
+        $.when(ajax1, ajax2).done(function(result1, result2) {
+            var response1 = result1[0];
+            var response2 = result2[0];
+
+            agent_id_dict = response1.data.id_dict;
+            agent_organization = response1.data.organization;
+            master_agent_name = response1.data.organization.name;
+
+            first_chat = response2.data.welcome_message;
+            init_chat_box();
+            init_organization();
+            renderChatAtAgentList();
+        });
+        // $.ajax({
+        //     type: "GET",
+        //     url: "../get_organization",
+        //     success: function (response) {
+        //         response = response.data;
+        //         // console.log('response', response);
+        //         agent_id_dict = response.id_dict;
+        //         agent_organization = response.organization;
+        //         master_agent_name = response.organization.name;
+        //         $.ajax({
+        //             type: "GET",
+        //             url: "../get_welcome_message",
+        //             success: function (response) {
+        //                 first_chat = response.data.welcome_message;
+        //                 init_chat_box();
+        //                 init_organization();
+        //                 renderChatAtAgentList();
+        //             }
+        //         })
+        //     }
+        // })
         $.ajax({
             type: "GET",
             url: "../get_first_query",
@@ -521,6 +543,10 @@
             return;
         }
         let jm = JSON.parse(message);
+        if (!["tool_call", "observation"].includes(jm["type"])) {
+            return;
+        }
+
         console.log(historys.length + 1, JSON.parse(JSON.stringify(jm)));
 
         var history = {};
@@ -1021,6 +1047,12 @@
 
     function begin() {
         show_id = 0;
+        div_right.empty();
+        div_right.append(`
+            <div class="agent-empty">
+                <img class="empty-img" src="./image/empty.svg" alt="">
+            </div>
+        `);
         show_step();
         show_by_history(historys[show_id]);
     }

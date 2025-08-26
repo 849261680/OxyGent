@@ -6,7 +6,7 @@ from .oxy import Oxy
 from .oxy_factory import OxyFactory
 from .schemas import OxyOutput, OxyRequest, OxyResponse, OxyState
 
-load_dotenv()
+load_dotenv(".env")
 
 __all__ = [
     "Oxy",
