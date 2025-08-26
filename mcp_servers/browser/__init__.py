@@ -1,11 +1,11 @@
 """
-MCP Server for Browser Operations
+用于浏览器操作的 MCP 服务器
 
-This package provides browser automation tools that can be invoked by an agent.
-It includes tools for navigating web pages, interacting with elements,
-capturing screenshots, managing browser tabs, and automatic login capabilities
-using the Playwright framework.
+该包提供可由代理调用的浏览器自动化工具。  
+它包含用于网页导航、元素交互、截图捕获、浏览器标签管理，  
+以及基于 Playwright 框架的自动登录功能。
 """
+
 
 from .core import mcp, check_dependencies
 from .navigation import (

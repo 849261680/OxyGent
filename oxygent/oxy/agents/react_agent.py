@@ -304,6 +304,7 @@ class ReActAgent(LocalAgent):
         Returns:
             OxyResponse: Final response with answer and ReAct memory trace.
         """
+        
         def _plain_text(q):
             """ list/dict query -> str"""
             if isinstance(q, list):
