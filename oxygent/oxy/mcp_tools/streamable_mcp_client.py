@@ -1,7 +1,7 @@
 """Streamable-HTTP MCP client implementation."""
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, List
 
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
@@ -17,9 +17,6 @@ class StreamableMCPClient(BaseMCPClient):
     """MCP client implementation using Streamable-HTTP transport."""
 
     server_url: AnyUrl = Field("")
-    headers: Dict[str, str] = Field(
-        default_factory=dict, description="Extra HTTP headers"
-    )
     middlewares: List[Any] = Field(
         default_factory=list, description="Client-side MCP middlewares"
     )
@@ -27,7 +24,7 @@ class StreamableMCPClient(BaseMCPClient):
     async def init(self, is_fetch_tools=True) -> None:
         """Initialize the HTTP streaming connection to the MCP server."""
         try:
-            if self.is_keep_alive:
+            if not self.is_dynamic_headers and self.is_keep_alive:
                 self._http_transport = await self._exit_stack.enter_async_context(
                     streamablehttp_client(
                         build_url(self.server_url), headers=self.headers
@@ -49,7 +46,9 @@ class StreamableMCPClient(BaseMCPClient):
                 if is_fetch_tools:
                     await self.list_tools()
             else:
-                async with streamablehttp_client(build_url(self.server_url)) as (
+                async with streamablehttp_client(
+                    build_url(self.server_url), headers=self.headers
+                ) as (
                     read,
                     write,
                     _,
@@ -63,8 +62,10 @@ class StreamableMCPClient(BaseMCPClient):
             await self.cleanup()
             raise Exception(f"Server {self.name} error") from e
 
-    async def call_tool(self, tool_name, arguments):
-        async with streamablehttp_client(build_url(self.server_url)) as (
+    async def call_tool(self, tool_name, arguments, headers=None):
+        async with streamablehttp_client(
+            build_url(self.server_url), headers=headers
+        ) as (
             read,
             write,
             _,

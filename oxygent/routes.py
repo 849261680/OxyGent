@@ -164,7 +164,7 @@ async def get_node_info(item_id: str):
                     node_data["input"]["arguments"],
                 ]:
                     for k, v in tree.items():
-                        if isinstance(v, str) and v in env_value_to_key:
+                        if v and isinstance(v, str) and v in env_value_to_key:
                             tree[k] = f"${{{env_value_to_key[v]}}}"
                         if isinstance(v, (int, float)) and not isinstance(v, bool):
                             if v <= 1:

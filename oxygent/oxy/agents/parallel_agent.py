@@ -6,9 +6,8 @@ across team members and aggregates their results into a unified response.
 
 import asyncio
 
-import shortuuid
-
 from ...schemas import Memory, Message, OxyRequest, OxyResponse
+from ...utils.common_utils import generate_uuid
 from .local_agent import LocalAgent
 
 
@@ -29,7 +28,7 @@ class ParallelAgent(LocalAgent):
             OxyResponse: Combined response with numbered results from all team members.
         """
 
-        parallel_id = shortuuid.ShortUUID().random(length=16)
+        parallel_id = generate_uuid()
         oxy_responses = await asyncio.gather(
             *[
                 oxy_request.call(

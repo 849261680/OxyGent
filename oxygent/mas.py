@@ -18,7 +18,6 @@ NOTE: This module contains the following parts:
 # from __future__ import annotations
 
 import asyncio
-import datetime
 import json
 import os
 import traceback
@@ -26,7 +25,6 @@ from collections import OrderedDict
 from typing import Callable, Optional
 
 import msgpack
-import shortuuid
 from elasticsearch import AsyncElasticsearch
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -47,6 +45,8 @@ from .routes import router
 from .schemas import OxyRequest, OxyResponse, WebResponse
 from .utils.common_utils import (
     _compose_query_parts,
+    generate_uuid,
+    get_format_time,
     msgpack_preprocess,
     print_tree,
     to_json,
@@ -86,6 +86,10 @@ class MAS(BaseModel):
     event_dict: dict = Field(default_factory=dict)
 
     message_prefix: str = Field("oxygent")
+
+    global_data: dict = Field(
+        default_factory=dict, description="public data in the scope of application"
+    )
 
     func_filter: Optional[Callable] = Field(
         lambda x: x, exclude=True, description="filter function"
@@ -250,7 +254,6 @@ class MAS(BaseModel):
             self.es_client = db_factory.get_instance(JesEs, hosts, user, password)
         else:
             self.es_client = db_factory.get_instance(LocalEs)
-
         # trace table
         await self.es_client.create_index(
             Config.get_app_name() + "_trace",
@@ -259,7 +262,9 @@ class MAS(BaseModel):
                     "properties": {
                         "request_id": {"type": "keyword"},
                         "group_id": {"type": "keyword"},
+                        "group_data": Config.get_es_schema_group_data(),
                         "trace_id": {"type": "keyword"},
+                        "shared_data": Config.get_es_schema_shared_data(),
                         "from_trace_id": {"type": "keyword"},
                         "root_trace_ids": {"type": "keyword"},
                         "input": {"type": "text"},
@@ -269,8 +274,9 @@ class MAS(BaseModel):
                             "format": "yyyy-MM-dd HH:mm:ss.SSSSSSSSS",
                             "type": "date",
                         },
-                    }
-                }
+                    },
+                },
+                "settings": Config.get_es_settings_config(),
             },
         )
         # message table
@@ -280,6 +286,7 @@ class MAS(BaseModel):
                 {
                     "mappings": {
                         "properties": {
+                            "message_id": {"type": "keyword"},
                             "trace_id": {"type": "keyword"},
                             "message": {"type": "text"},
                             "message_type": {"type": "keyword"},
@@ -287,43 +294,46 @@ class MAS(BaseModel):
                                 "format": "yyyy-MM-dd HH:mm:ss.SSSSSSSSS",
                                 "type": "date",
                             },
-                        }
-                    }
+                        },
+                    },
+                    "settings": Config.get_es_settings_config(),
                 },
             )
         # node table
-        node_schema = {
-            "node_id": {"type": "keyword"},
-            "node_type": {"type": "keyword"},
-            "group_id": {"type": "keyword"},
-            "trace_id": {"type": "keyword"},
-            "caller": {"type": "keyword"},
-            "callee": {"type": "keyword"},
-            "parallel_id": {"type": "keyword"},
-            "father_node_id": {"type": "keyword"},
-            "input": {"type": "text"},
-            "input_md5": {"type": "keyword"},
-            "output": {"type": "text"},
-            "state": {"type": "keyword"},
-            "extra": {"type": "text"},
-            "call_stack": {"type": "text"},
-            "node_id_stack": {"type": "text"},
-            "pre_node_ids": {"type": "text"},
-            "create_time": {
-                "format": "yyyy-MM-dd HH:mm:ss.SSSSSSSSS",
-                "type": "date",
-            },
-            "update_time": {
-                "format": "yyyy-MM-dd HH:mm:ss.SSSSSSSSS",
-                "type": "date",
-            },
-        }
-        shared_data_schema = Config.get_es_schema_shared_data()
-        if shared_data_schema:
-            node_schema["shared_data"] = shared_data_schema
         await self.es_client.create_index(
             Config.get_app_name() + "_node",
-            {"mappings": {"properties": node_schema}},
+            {
+                "mappings": {
+                    "properties": {
+                        "node_id": {"type": "keyword"},
+                        "node_type": {"type": "keyword"},
+                        "group_id": {"type": "keyword"},
+                        "trace_id": {"type": "keyword"},
+                        "caller": {"type": "keyword"},
+                        "callee": {"type": "keyword"},
+                        "parallel_id": {"type": "keyword"},
+                        "father_node_id": {"type": "keyword"},
+                        "input": {"type": "text"},
+                        "input_md5": {"type": "keyword"},
+                        "output": {"type": "text"},
+                        "state": {"type": "keyword"},
+                        "extra": {"type": "text"},
+                        "call_stack": {"type": "text"},
+                        "node_id_stack": {"type": "text"},
+                        "pre_node_ids": {"type": "text"},
+                        "shared_data": Config.get_es_schema_shared_data(),
+                        "create_time": {
+                            "format": "yyyy-MM-dd HH:mm:ss.SSSSSSSSS",
+                            "type": "date",
+                        },
+                        "update_time": {
+                            "format": "yyyy-MM-dd HH:mm:ss.SSSSSSSSS",
+                            "type": "date",
+                        },
+                    },
+                },
+                "settings": Config.get_es_settings_config(),
+            },
         )
         # history table
         await self.es_client.create_index(
@@ -339,8 +349,9 @@ class MAS(BaseModel):
                             "format": "yyyy-MM-dd HH:mm:ss.SSSSSSSSS",
                             "type": "date",
                         },
-                    }
-                }
+                    },
+                },
+                "settings": Config.get_es_settings_config(),
             },
         )
 
@@ -575,18 +586,19 @@ class MAS(BaseModel):
             parts = redis_key.split(":")
             current_trace_id = parts[-1] if len(parts) >= 3 else ""
 
-            message_doc = {
-                "trace_id": current_trace_id,
-                "message": to_json(message),  # Convert message to JSON string
-                "message_type": message.get("type", "")
-                if isinstance(message, dict)
-                else "",
-                "create_time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
-            }
-
             # Insert into Elasticsearch
+            message_id = generate_uuid()
+            message_type = message.get("type", "") if isinstance(message, dict) else ""
             await self.es_client.index(
-                index=Config.get_app_name() + "_message", body=message_doc
+                Config.get_app_name() + "_message",
+                doc_id=message_id,
+                body={
+                    "message_id": message_id,
+                    "trace_id": current_trace_id,
+                    "message": to_json(message),
+                    "message_type": message_type,
+                    "create_time": get_format_time(),
+                },
             )
         await self.redis_client.lpush(redis_key, bytes_msg)
 
@@ -613,7 +625,6 @@ class MAS(BaseModel):
             OxyResponse: Fully populated response object.
         """
         try:
-            payload = self.func_filter(payload)
             # distinct attachments
             if "attachments" in payload and payload["attachments"]:
                 atts, remotes = [], []
@@ -638,8 +649,10 @@ class MAS(BaseModel):
                 payload["shared_data"] = dict()
             payload["shared_data"]["query"] = payload["query"]
 
+            group_data = payload.get("group_data", {})
+
             # payload = payload or {}
-            # payload.setdefault("shared_data",{})["query"] = payload.get("query","")
+            # payload.set default("shared_data",{})["query"] = payload.get("query","")
 
             if "restart_node_id" in payload and payload.get("restart_node_id"):
                 es_response = await self.es_client.search(
@@ -683,6 +696,9 @@ class MAS(BaseModel):
                     )
 
             oxy_request = OxyRequest(mas=self)
+            oxy_request.group_data = group_data
+            if "current_trace_id" in payload and payload["current_trace_id"]:
+                oxy_request.current_trace_id = payload["current_trace_id"]
             # Set group_id: inherit if from_trace_id is provided, else new
             if "from_trace_id" in payload and payload["from_trace_id"]:
                 es_response_group_id = await self.es_client.search(
@@ -692,9 +708,39 @@ class MAS(BaseModel):
                         "size": 1,
                     },
                 )
+
                 hits = es_response_group_id.get("hits", {}).get("hits", [])
                 if hits:
                     oxy_request.group_id = hits[0]["_source"].get("group_id", "")
+                    raw_group_data = hits[0]["_source"].get("group_data", {})
+                    if isinstance(raw_group_data, str):
+                        try:
+                            history_group_data = json.loads(raw_group_data)
+                        except json.JSONDecodeError:
+                            logger.warning(
+                                "Failed to parse group_data from string, using empty dict"
+                            )
+                            history_group_data = {}
+                    else:
+                        history_group_data = (
+                            raw_group_data if isinstance(raw_group_data, dict) else {}
+                        )
+
+                    merged_group_data = history_group_data.copy()
+                    merged_group_data.update(oxy_request.group_data)
+                    oxy_request.group_data = merged_group_data
+                    logger.debug(
+                        f"继承历史会话 group_id: {oxy_request.group_id}, "
+                        f"历史 group_data: {history_group_data if history_group_data else '空'}, "
+                        f"当前 group_data: {oxy_request.group_data if oxy_request.group_data else '空'}, "
+                        f"合并后 group_data: {merged_group_data}",
+                        extra={"trace_id": oxy_request.current_trace_id},
+                    )
+                else:
+                    logger.warning(
+                        f"未找到 from_trace_id: {payload['from_trace_id']} 对应的记录，无法继承历史 group_data",
+                        extra={"trace_id": oxy_request.current_trace_id},
+                    )
 
             oxy_request_fields = oxy_request.model_fields
             for k, v in payload.items():
@@ -920,6 +966,8 @@ class MAS(BaseModel):
             elif request.method == "POST":
                 payload = await request.json()
 
+            payload = self.func_filter(payload)
+
             if "query" not in payload:
                 payload["query"] = ""
 
@@ -954,7 +1002,12 @@ class MAS(BaseModel):
                 )
 
             if "current_trace_id" not in payload:
-                payload["current_trace_id"] = shortuuid.ShortUUID().random(length=16)
+                payload["current_trace_id"] = generate_uuid()
+
+            # fetch headers
+            if "shared_data" not in payload:
+                payload["shared_data"] = dict()
+            payload["shared_data"]["_headers"] = dict(request.headers)
 
             return payload
 
@@ -981,6 +1034,25 @@ class MAS(BaseModel):
             return EventSourceResponse(
                 self.event_stream(redis_key, current_trace_id, task)
             )
+
+        @app.api_route("/async/chat", methods=["GET", "POST"])
+        async def async_chat(request: Request):
+            payload = await request_to_payload(request)
+            current_trace_id = payload["current_trace_id"]
+
+            logger.info(
+                "SSE connection established.",
+                extra={"trace_id": current_trace_id},
+            )
+            redis_key = f"{self.message_prefix}:{self.name}:{current_trace_id}"
+            task = asyncio.create_task(
+                self.chat_with_agent(payload=payload, send_msg_key=redis_key)
+            )
+            task.add_done_callback(
+                lambda future: self.active_tasks.pop(current_trace_id, None)
+            )
+            self.active_tasks[current_trace_id] = task
+            return WebResponse().to_dict()
 
         async def run_uvicorn():
             """Run the Uvicorn server with the FastAPI app."""

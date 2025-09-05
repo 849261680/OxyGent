@@ -49,7 +49,7 @@ def patch_source_to_bytes(monkeypatch):
     monkeypatch.setattr(
         cu,
         "source_to_bytes",
-        lambda src: asyncio.Future(),
+        lambda src: asyncio.new_event_loop().create_future(),
         raising=True,
     )
     fut = cu.source_to_bytes(None)

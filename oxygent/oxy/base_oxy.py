@@ -6,21 +6,54 @@ handling, logging, and data persistence patterns.
 """
 
 import asyncio
+import inspect
 import json
 import logging
 import traceback
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Optional
 
-import shortuuid
 from pydantic import BaseModel, Field
 
 # from ..mas import MAS
 from ..config import Config
 from ..schemas import OxyRequest, OxyResponse, OxyState
-from ..utils.common_utils import filter_json_types, get_format_time, get_md5, to_json
+from ..utils.common_utils import (
+    filter_json_types,
+    generate_uuid,
+    get_format_time,
+    get_md5,
+    to_json,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def ensure_async(func: Callable) -> Callable:
+    """
+    Ensure a function is async. If it's sync, wrap it to make it async.
+
+    Args:
+        func: The function to ensure is async
+
+    Returns:
+        An async function
+    """
+    if func is None:
+        return None
+
+    if inspect.iscoroutinefunction(func):
+        return func
+
+    async def async_wrapper(*args, **kwargs):
+        return func(*args, **kwargs)
+
+    return async_wrapper
+
+
+async def default_async_identity(x):
+    """Default async identity function that returns input unchanged."""
+    return x
 
 
 class Oxy(BaseModel, ABC):
@@ -87,17 +120,21 @@ class Oxy(BaseModel, ABC):
     )
 
     func_process_input: Callable = Field(
-        lambda x: x, exclude=True, description="Input processing function"
+        default_async_identity, exclude=True, description="Input processing function"
     )
     func_process_output: Callable = Field(
-        lambda x: x, exclude=True, description="Output processing function"
+        default_async_identity, exclude=True, description="Output processing function"
     )
 
     func_format_input: Optional[Callable] = Field(
-        lambda x: x, exclude=True, description="Input formatting function for callee"
+        default_async_identity,
+        exclude=True,
+        description="Input formatting function for callee",
     )
     func_format_output: Optional[Callable] = Field(
-        lambda x: x, exclude=True, description="Output formatting function for caller"
+        default_async_identity,
+        exclude=True,
+        description="Output formatting function for caller",
     )
     func_execute: Optional[Callable] = Field(
         None, exclude=True, description="Execution function"
@@ -120,7 +157,26 @@ class Oxy(BaseModel, ABC):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._semaphore: asyncio.Semaphore = asyncio.Semaphore(self.semaphore)
+        self._ensure_async_functions()
         self._set_desc_for_llm()
+
+    def _ensure_async_functions(self):
+        """Ensure all function fields are async. Convert sync functions to async if needed."""
+        # List of function field names to check and convert
+        func_fields = [
+            "func_process_input",
+            "func_process_output",
+            "func_format_input",
+            "func_format_output",
+            "func_execute",
+            "func_interceptor",
+        ]
+
+        for field_name in func_fields:
+            func = getattr(self, field_name, None)
+            if func is not None:
+                async_func = ensure_async(func)
+                object.__setattr__(self, field_name, async_func)
 
     def model_post_init(self, __context):
         if self.class_name is None:
@@ -170,13 +226,13 @@ class Oxy(BaseModel, ABC):
         """Pre-process the request before execution."""
         # Initialize the parameters
         if not oxy_request.node_id:
-            oxy_request.node_id = shortuuid.ShortUUID().random(length=16)
+            oxy_request.node_id = generate_uuid()
         oxy_request.callee = self.name
         oxy_request.callee_category = self.category
         oxy_request.call_stack.append(self.name)
         oxy_request.node_id_stack.append(oxy_request.node_id)
         # Handle input
-        oxy_request = self.func_process_input(oxy_request)
+        oxy_request = await self.func_process_input(oxy_request)
         return oxy_request
 
     async def _pre_log(self, oxy_request: OxyRequest):
@@ -264,7 +320,7 @@ class Oxy(BaseModel, ABC):
                         ),
                     )
                     oxy_response.oxy_request = oxy_request
-                    return self._format_output(oxy_response)
+                    return await self._format_output(oxy_response)
                 elif (
                     oxy_request.restart_node_output
                     and current_node_order == oxy_request.restart_node_order
@@ -289,7 +345,7 @@ class Oxy(BaseModel, ABC):
                         ),
                     )
                     oxy_response.oxy_request = oxy_request
-                    return self._format_output(oxy_response)
+                    return await self._format_output(oxy_response)
                 else:
                     oxy_request.is_load_data_for_restart = False
             else:
@@ -307,39 +363,44 @@ class Oxy(BaseModel, ABC):
         if self.mas and self.mas.es_client:
             callee_name = oxy_request.callee
             callee_cat = oxy_request.callee_category
-            save_body = {
-                "node_id": oxy_request.node_id,
-                "node_type": callee_cat,
-                "trace_id": oxy_request.current_trace_id,
-                "group_id": oxy_request.group_id,
-                "request_id": oxy_request.request_id,
-                "caller": oxy_request.caller,
-                "callee": callee_name,
-                "parallel_id": oxy_request.parallel_id,
-                "father_node_id": oxy_request.father_node_id,
-                "call_stack": oxy_request.call_stack,
-                "node_id_stack": oxy_request.node_id_stack,
-                "pre_node_ids": oxy_request.pre_node_ids,
-                "create_time": get_format_time(),
-            }
-            shared_data_schema = Config.get_es_schema_shared_data()
+            # save shared_data
+            shared_data_schema = Config.get_es_schema_shared_data().get(
+                "properties", {}
+            )
             if shared_data_schema:
-                save_body["shared_data"] = {
+                to_save_shared_data = {
                     k: v
                     for k, v in oxy_request.shared_data.items()
                     if k in shared_data_schema
                 }
+            else:
+                to_save_shared_data = to_json(oxy_request.shared_data)
             await self.mas.es_client.index(
                 Config.get_app_name() + "_node",
                 doc_id=oxy_request.node_id,
-                body=save_body,
+                body={
+                    "node_id": oxy_request.node_id,
+                    "node_type": callee_cat,
+                    "trace_id": oxy_request.current_trace_id,
+                    "group_id": oxy_request.group_id,
+                    "request_id": oxy_request.request_id,
+                    "caller": oxy_request.caller,
+                    "callee": callee_name,
+                    "parallel_id": oxy_request.parallel_id,
+                    "father_node_id": oxy_request.father_node_id,
+                    "call_stack": oxy_request.call_stack,
+                    "node_id_stack": oxy_request.node_id_stack,
+                    "pre_node_ids": oxy_request.pre_node_ids,
+                    "shared_data": to_save_shared_data,
+                    "create_time": get_format_time(),
+                },
             )
         else:
             logger.warning(f"Node {oxy_request.callee} data unsaved.")
 
     async def _format_input(self, oxy_request: OxyRequest) -> OxyRequest:
         """Format input arguments for execution."""
-        return self.func_format_input(oxy_request)
+        return await self.func_format_input(oxy_request)
 
     async def _pre_send_message(self, oxy_request: OxyRequest):
         """Send tool call message to frontend if enabled."""
@@ -381,7 +442,7 @@ class Oxy(BaseModel, ABC):
         return oxy_response
 
     async def _post_process(self, oxy_response: OxyResponse) -> OxyResponse:
-        return self.func_process_output(oxy_response)
+        return await self.func_process_output(oxy_response)
 
     async def _post_log(self, oxy_response: OxyResponse):
         """Log the execution result."""
@@ -410,6 +471,18 @@ class Oxy(BaseModel, ABC):
         callee_name = oxy_request.callee
         callee_cat = oxy_request.callee_category
         if self.mas and self.mas.es_client:
+            # save shared_data
+            shared_data_schema = Config.get_es_schema_shared_data().get(
+                "properties", {}
+            )
+            if shared_data_schema:
+                to_save_shared_data = {
+                    k: v
+                    for k, v in oxy_request.shared_data.items()
+                    if k in shared_data_schema
+                }
+            else:
+                to_save_shared_data = to_json(oxy_request.shared_data)
             await self.mas.es_client.update(
                 Config.get_app_name() + "_node",
                 doc_id=oxy_request.node_id,
@@ -421,6 +494,7 @@ class Oxy(BaseModel, ABC):
                     "request_id": oxy_request.request_id,
                     "caller": oxy_request.caller,
                     "callee": callee_name,
+                    "shared_data": to_save_shared_data,
                     "input": to_json(oxy_input),
                     "input_md5": oxy_request.input_md5,
                     "output": to_json(oxy_response.output),
@@ -432,8 +506,8 @@ class Oxy(BaseModel, ABC):
         else:
             logger.warning(f"Node {oxy_request.callee} data unsaved.")
 
-    def _format_output(self, oxy_response: OxyResponse) -> OxyResponse:
-        oxy_response = self.func_format_output(oxy_response)
+    async def _format_output(self, oxy_response: OxyResponse) -> OxyResponse:
+        oxy_response = await self.func_format_output(oxy_response)
         if oxy_response.state is OxyState.FAILED and self.friendly_error_text:
             oxy_response.output = self.friendly_error_text
         return oxy_response
@@ -467,6 +541,7 @@ class Oxy(BaseModel, ABC):
                 {
                     "type": "answer",
                     "content": oxy_response.output,
+                    "current_trace_id": oxy_request.current_trace_id,
                     "request_id": oxy_request.request_id,
                 }
             )
@@ -627,7 +702,7 @@ class Oxy(BaseModel, ABC):
                     },
                 )
 
-            oxy_response = self._format_output(oxy_response)
+            oxy_response = await self._format_output(oxy_response)
             await self._post_send_message(oxy_response)
 
             return oxy_response

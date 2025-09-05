@@ -37,7 +37,12 @@
         "vearch": {},
         "es": {},
         "es_schema": {
-            "shared_data": {}
+            "shared_data": {"type": "text"},
+            "group_data": {"type": "text"}
+        },
+        "es_settings": {
+            "number_of_shards": 1,
+            "number_of_replicas": 1
         },
         "redis": {},
         "redis_param": {
@@ -116,6 +121,10 @@
             "path": "/export/Logs/server_logger.log",
             "color_is_on_background": true,
             "is_bright": true
+        },
+        "server": {
+            "host": "0.0.0.0",
+            "auto_open_webpage": false
         },
         "es": {
             "hosts": [

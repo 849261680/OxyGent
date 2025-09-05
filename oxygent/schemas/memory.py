@@ -32,7 +32,7 @@ class Message(BaseModel):
     """Represents a chat message in the conversation."""
 
     role: Literal["system", "user", "assistant", "tool"] = Field(...)
-    content: Optional[Union[str, list]] = Field(default=None)
+    content: Optional[Union[str, list, dict]] = Field(default=None)
     tool_calls: Optional[List[ToolCall]] = Field(default=None)
     name: Optional[str] = Field(default=None)
     tool_call_id: Optional[str] = Field(default=None)
@@ -67,7 +67,9 @@ class Message(BaseModel):
         if self.content is not None:
             message["content"] = self.content
         if self.tool_calls is not None:
-            message["tool_calls"] = [tool_call.dict() for tool_call in self.tool_calls]
+            message["tool_calls"] = [
+                tool_call.model_dump() for tool_call in self.tool_calls
+            ]
         if self.name is not None:
             message["name"] = self.name
         if self.tool_call_id is not None:

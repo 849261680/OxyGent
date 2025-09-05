@@ -2,9 +2,8 @@
 
 import asyncio
 
-import shortuuid
-
 from oxygent import MAS, oxy
+from oxygent.utils.common_utils import generate_uuid
 from oxygent.utils.env_utils import get_env_var
 
 oxy_space = [
@@ -27,16 +26,16 @@ oxy_space = [
 
 async def main():
     async with MAS(oxy_space=oxy_space) as mas:
-        rid = shortuuid.ShortUUID().random(length=22)
+        request_id = generate_uuid(length=22)
         result = await mas.chat_with_agent(
             {
                 "query": "hello!",
-                "request_id": rid,
+                "request_id": request_id,
             }
         )
 
         print("output :", result)
-        print("used request_id :", rid)
+        print("used request_id :", request_id)
 
 
 if __name__ == "__main__":

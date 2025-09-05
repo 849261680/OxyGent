@@ -1,6 +1,7 @@
 from .agents import (
     ChatAgent,
     ParallelAgent,
+    RAGAgent,
     ReActAgent,
     SSEOxyGent,
     WorkflowAgent,
@@ -21,6 +22,7 @@ from .mcp_tools import MCPTool, SSEMCPClient, StdioMCPClient, StreamableMCPClien
 __all__ = [
     "Oxy",
     "ChatAgent",
+    "RAGAgent",
     "ReActAgent",
     "WorkflowAgent",
     "ParallelAgent",

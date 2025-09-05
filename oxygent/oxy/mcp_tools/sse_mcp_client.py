@@ -6,7 +6,7 @@ MCP servers to clients, ideal for streaming responses and live updates.
 """
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, List
 
 from mcp import ClientSession
 from mcp.client.sse import sse_client
@@ -27,9 +27,6 @@ class SSEMCPClient(BaseMCPClient):
     """
 
     sse_url: AnyUrl = Field("")
-    headers: Dict[str, str] = Field(
-        default_factory=dict, description="Extra HTTP headers"
-    )
     middlewares: List[Any] = Field(
         default_factory=list, description="Client-side MCP middlewares"
     )
@@ -42,7 +39,7 @@ class SSEMCPClient(BaseMCPClient):
         server.
         """
         try:
-            if self.is_keep_alive:
+            if not self.is_dynamic_headers and self.is_keep_alive:
                 # header
                 sse_transport = await self._exit_stack.enter_async_context(
                     sse_client(build_url(self.sse_url), headers=self.headers)
@@ -66,7 +63,9 @@ class SSEMCPClient(BaseMCPClient):
                 if is_fetch_tools:
                     await self.list_tools()
             else:
-                async with sse_client(build_url(self.sse_url)) as streams:
+                async with sse_client(
+                    build_url(self.sse_url), headers=self.headers
+                ) as streams:
                     async with ClientSession(*streams) as session:
                         await session.initialize()
                         tools_response = await session.list_tools()
@@ -76,8 +75,8 @@ class SSEMCPClient(BaseMCPClient):
             await self.cleanup()
             raise Exception(f"Server {self.name} error")
 
-    async def call_tool(self, tool_name, arguments):
-        async with sse_client(build_url(self.sse_url)) as streams:
+    async def call_tool(self, tool_name, arguments, headers=None):
+        async with sse_client(build_url(self.sse_url), headers=headers) as streams:
             async with ClientSession(*streams) as session:
                 await session.initialize()
                 return await session.call_tool(tool_name, arguments)

@@ -8,7 +8,7 @@ and tool execution through the Model Context Protocol standard.
 import asyncio
 import logging
 from contextlib import AsyncExitStack
-from typing import Any
+from typing import Any, Dict
 
 import anyio
 from mcp import ClientSession
@@ -34,6 +34,11 @@ class BaseMCPClient(BaseTool):
     """
 
     included_tool_name_list: list = Field(default_factory=list)
+    headers: Dict[str, str] = Field(
+        default_factory=dict, description="Extra HTTP headers"
+    )
+    is_dynamic_headers: bool = Field(False, description="is dynamic headers")
+    is_inherit_headers: bool = Field(False, description="is inherit headers")
     is_keep_alive: bool = Field(default_factory=Config.get_tool_mcp_is_keep_alive)
 
     def __init__(self, **kwargs):
@@ -103,7 +108,7 @@ class BaseMCPClient(BaseTool):
         """
         tool_name = oxy_request.callee
 
-        if self.is_keep_alive:
+        if not self.is_dynamic_headers and self.is_keep_alive:
             if not self._session:
                 raise RuntimeError(f"Server {self.name} not initialized")
 
@@ -117,7 +122,24 @@ class BaseMCPClient(BaseTool):
                     tool_name, oxy_request.arguments
                 )
         else:
-            mcp_response = await self.call_tool(tool_name, oxy_request.arguments)
+            if self.is_dynamic_headers:
+                _headers = (
+                    oxy_request.shared_data.get("_headers", {})
+                    if self.is_inherit_headers
+                    else {}
+                )
+                if "host" in _headers:
+                    del _headers["host"]
+                merged_headers = (
+                    self.headers | _headers | oxy_request.shared_data.get("headers", {})
+                )
+            else:
+                merged_headers = self.headers
+            mcp_response = await self.call_tool(
+                tool_name,
+                oxy_request.arguments,
+                headers=merged_headers,
+            )
         # TODO: Handle result objects and progress tracking
         results = [content.text.strip() for content in mcp_response.content]
         return OxyResponse(

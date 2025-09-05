@@ -10,7 +10,6 @@ import json
 import logging
 from typing import Callable, Optional
 
-import shortuuid
 from pydantic import Field
 
 from ...config import Config
@@ -26,7 +25,7 @@ from ...schemas import (
     OxyResponse,
     OxyState,
 )
-from ...utils.common_utils import chunk_list, extract_first_json
+from ...utils.common_utils import chunk_list, extract_first_json, generate_uuid
 from .local_agent import LocalAgent
 
 logger = logging.getLogger(__name__)
@@ -80,7 +79,7 @@ class ReActAgent(LocalAgent):
 
     trust_mode: bool = Field(False, description="Enable trust mode for direct results")
 
-    func_parse_llm_response: Optional[Callable[[str], LLMResponse]] = Field(
+    func_parse_llm_response: Optional[Callable[[str, OxyRequest], LLMResponse]] = Field(
         None, exclude=True, description="Function to parse LLM output"
     )
 
@@ -371,7 +370,7 @@ class ReActAgent(LocalAgent):
                         f"Invalid tool call output type: {type(llm_response.output)}"
                     )
 
-                parallel_id = shortuuid.ShortUUID().random(length=16)
+                parallel_id = generate_uuid()
                 oxy_responses = await asyncio.gather(
                     *[
                         oxy_request.call(

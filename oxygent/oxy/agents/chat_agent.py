@@ -5,6 +5,8 @@ by managing conversation memory, processing user queries, and coordinating with 
 models to generate responses.
 """
 
+from pydantic import model_validator
+
 from ...schemas import Memory, Message, OxyRequest, OxyResponse
 from .local_agent import LocalAgent
 
@@ -16,8 +18,11 @@ class ChatAgent(LocalAgent):
         """Initialize the Chat agent with appropriate prompt and parsing function."""
         super().__init__(**kwargs)
 
+    @model_validator(mode="after")
+    def set_default_prompt(self):
         if not self.prompt:
             self.prompt = "You are a helpful assistant."
+        return self
 
     async def _execute(self, oxy_request: OxyRequest) -> OxyResponse:
         """Execute a chat interaction with the language model.

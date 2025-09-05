@@ -37,6 +37,7 @@ class JesEs(BaseEs):
         if not body:
             raise ValueError("The config of the index ca not be empty")
 
+        # await self.client.indices.delete(index=index_name)  # !!! delete table
         # Create the index if not exists
         if not await self._index_exists(index_name):
             return await self._create_new_index(index_name, body)

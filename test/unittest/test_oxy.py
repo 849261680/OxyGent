@@ -25,12 +25,12 @@ class DummyOxy(Oxy):
         )
 
 
-@pytest.mark.asyncio
 class TestBaseOxy:
     @pytest.fixture
     def dummy_oxy(self):
         return DummyOxy(name="dummy", desc="dummy desc", category="tool")
 
+    @pytest.mark.asyncio
     async def test_initialization(self, dummy_oxy):
         """Test attribute initialization of DummyOxy."""
         assert dummy_oxy.name == "dummy"
@@ -56,6 +56,7 @@ class TestBaseOxy:
         assert "tool_b" in dummy_oxy.permitted_tool_name_list
         assert "tool_c" in dummy_oxy.permitted_tool_name_list
 
+    @pytest.mark.asyncio
     async def test_execute_runs_lifecycle(self, dummy_oxy):
         """Test that the execute method runs end-to-end returning OxyResponse."""
         oxy_request = OxyRequest(

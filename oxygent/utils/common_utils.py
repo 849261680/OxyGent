@@ -17,6 +17,7 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import aiofiles
 import httpx
+import shortuuid
 from PIL import Image
 from pydantic import AnyUrl
 
@@ -361,3 +362,7 @@ def _compose_query_parts(original_query, attachments):
         )
 
     return parts
+
+
+def generate_uuid(length=16):
+    return shortuuid.ShortUUID().random(length=length)

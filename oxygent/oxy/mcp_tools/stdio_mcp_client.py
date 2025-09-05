@@ -75,12 +75,17 @@ class StdioMCPClient(BaseMCPClient):
             await self._session.initialize()
             if is_fetch_tools:
                 await self.list_tools()
+        except FileNotFoundError as e:
+            # Re-raise specific validation errors without wrapping
+            logger.error(f"Validation error for server {self.name}: {e}")
+            await self.cleanup()
+            raise
         except Exception as e:
             logger.error(f"Error initializing server {self.name}: {e}")
             await self.cleanup()
             raise Exception(f"Server {self.name} error")
 
-    async def call_tool(self, tool_name, arguments):
+    async def call_tool(self, tool_name, arguments, headers=None):
         server_params = await self.get_server_params()
         async with stdio_client(server_params) as streams:
             async with ClientSession(*streams) as session:
